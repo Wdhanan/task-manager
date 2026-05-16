@@ -1,0 +1,9 @@
+# k8s/namespace.yml
+# Namespace = Isolierter Bereich (wie ein Ordner für K8s-Objekte)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taskmanager
+  labels:
+    name: taskmanager

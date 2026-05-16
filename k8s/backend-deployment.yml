@@ -1,0 +1,64 @@
+# k8s/backend-deployment.yml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: taskmanager
+spec:
+  replicas: 2
+  # ↑ 2 Backend-Instanzen = Hochverfügbarkeit
+  #   Wenn eine abstürzt → die andere läuft weiter
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: wdhanan/taskmanager-backend:latest
+          # ↑ Wird von GitHub Actions mit dem echten Image-Tag ersetzt
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:mysql://mysql:3306/taskmanager?useSSL=false&serverTimezone=UTC
+              # ↑ "mysql" = Name des MySQL-Services (Kubernetes-intern)
+            - name: SPRING_DATASOURCE_USERNAME
+              value: root
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: password
+            - name: APP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: jwt-secret
+          # Gesundheitscheck
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            # ↑ "Nach 60s starten, dann alle 30s prüfen ob Backend lebt"
+            #   Wenn es nicht antwortet → Kubernetes startet es neu
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: taskmanager
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP

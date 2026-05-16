@@ -1,0 +1,33 @@
+# k8s/ingress.yml
+# Ingress = Die Haustür der gesamten Anwendung
+# Regelt welche URL zu welchem Service geht
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskmanager-ingress
+  namespace: taskmanager
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # ↑ Benutze Nginx als Ingress Controller
+spec:
+  rules:
+    - http:
+        paths:
+          # /api/* → Backend
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+
+          # Alles andere → Frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

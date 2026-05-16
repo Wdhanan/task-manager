@@ -9,3 +9,9 @@ target/
 .env
 *.env
 .dockerignore
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.lock.hcl
+*.log
