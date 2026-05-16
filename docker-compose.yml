@@ -1,0 +1,75 @@
+# docker-compose.yml (im Root-Ordner taskmanager-app/)
+
+version: '3.8'
+
+services:
+
+  # ════════════════════════════════════
+  # DATENBANK
+  # ════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine        # Offizielles PostgreSQL Image
+    container_name: taskmanager-db
+    environment:
+      POSTGRES_DB: taskmanager       # Datenbank-Name
+      POSTGRES_USER: admin           # Benutzer
+      POSTGRES_PASSWORD: secret123   # Passwort
+    ports:
+      - "5432:5432"                  # Host:Container Port
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # ↑ Daten persistent speichern (bleiben nach Container-Neustart erhalten)
+    networks:
+      - taskmanager-network
+    healthcheck:                     # Warten bis DB bereit ist
+      test: ["CMD-SHELL", "pg_isready -U admin -d taskmanager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ════════════════════════════════════
+  # BACKEND (Spring Boot)
+  # ════════════════════════════════════
+  backend:
+    build:
+      context: ./backend             # Ordner mit dem Dockerfile
+      dockerfile: Dockerfile
+    container_name: taskmanager-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/taskmanager
+      # ↑ "postgres" = Name des postgres-Services oben
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: secret123
+      JWT_SECRET: meinSuperGeheimerJWTSchluessel12345
+      JWT_EXPIRATION: 86400000       # 24 Stunden in ms
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy   # Erst starten wenn DB bereit
+    networks:
+      - taskmanager-network
+
+  # ════════════════════════════════════
+  # FRONTEND (Angular + Nginx)
+  # ════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend/taskmanager-frontend
+      dockerfile: Dockerfile
+    container_name: taskmanager-frontend
+    ports:
+      - "4200:80"                    # Erreichbar unter localhost:4200
+    depends_on:
+      - backend
+    networks:
+      - taskmanager-network
+
+# Persistenter Speicher für Datenbank-Daten
+volumes:
+  postgres_data:
+
+# Internes Netzwerk: Container können sich gegenseitig beim Namen ansprechen
+networks:
+  taskmanager-network:
+    driver: bridge

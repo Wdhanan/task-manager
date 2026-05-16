@@ -1,0 +1,357 @@
+<!-- src/app/pages/tasks/tasks.component.html -->
+
+<div class="space-y-6">
+
+  <!-- HEADER -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Aufgaben</h1>
+      <p class="text-gray-500 text-sm mt-1">
+        {{ filteredTasks.length }} von {{ allTasks.length }} Aufgaben
+      </p>
+    </div>
+
+    <!-- ✅ FIX: openCreateModal() statt showCreateModal = true -->
+    <button
+      (click)="openCreateModal()"
+      class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700
+             flex items-center gap-2 transition-colors font-medium"
+    >
+      <span class="text-xl leading-none">+</span>
+      Neue Aufgabe
+    </button>
+  </div>
+
+  <!-- FILTER-LEISTE -->
+  <div class="bg-white rounded-xl shadow-sm p-4 flex flex-wrap gap-4">
+    <div class="flex-1 min-w-48">
+      <input
+        [formControl]="searchControl"
+        type="text"
+        placeholder="🔍 Suchen..."
+        class="w-full px-4 py-2 border border-gray-200 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+    </div>
+    <select
+      [(ngModel)]="selectedStatus"
+      (change)="applyFilters()"
+      class="px-4 py-2 border border-gray-200 rounded-lg bg-white
+             focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">Alle Status</option>
+      <option value="TODO">📋 Offen</option>
+      <option value="IN_PROGRESS">⚡ In Bearbeitung</option>
+      <option value="DONE">✅ Erledigt</option>
+    </select>
+    <select
+      [(ngModel)]="selectedPriority"
+      (change)="applyFilters()"
+      class="px-4 py-2 border border-gray-200 rounded-lg bg-white
+             focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">Alle Prioritäten</option>
+      <option value="LOW">🟢 Niedrig</option>
+      <option value="MEDIUM">🟡 Mittel</option>
+      <option value="HIGH">🔴 Hoch</option>
+    </select>
+    <button
+      (click)="resetFilters()"
+      class="px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100
+             rounded-lg transition-colors text-sm"
+    >
+      ✕ Zurücksetzen
+    </button>
+  </div>
+
+  <!-- LOADING -->
+  <div *ngIf="isLoading" class="flex justify-center py-12">
+    <div class="animate-spin h-10 w-10 border-4 border-blue-600
+                border-t-transparent rounded-full"></div>
+  </div>
+
+  <!-- LEER -->
+  <div *ngIf="!isLoading && filteredTasks.length === 0"
+       class="text-center py-16 text-gray-400">
+    <div class="text-6xl mb-4">📭</div>
+    <p class="text-lg font-medium">Keine Aufgaben gefunden</p>
+    <p class="text-sm mt-1">Passe deine Filter an oder erstelle eine neue Aufgabe</p>
+  </div>
+
+  <!-- TASK LISTE -->
+  <div class="grid gap-4" *ngIf="!isLoading && filteredTasks.length > 0">
+    <div *ngFor="let task of filteredTasks; trackBy: trackById"
+         class="bg-white rounded-xl shadow-sm p-5 hover:shadow-md
+                transition-shadow border border-gray-100">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <h3 class="font-semibold text-gray-800">{{ task.title }}</h3>
+            <span [class]="'px-2 py-0.5 rounded-full text-xs font-medium '
+                           + getStatusColor(task.status)">
+              {{ task.status }}
+            </span>
+            <span [class]="'px-2 py-0.5 rounded-full text-xs font-medium '
+                           + getPriorityColor(task.priority)">
+              {{ task.priority }}
+            </span>
+          </div>
+          <p class="text-gray-500 text-sm">{{ task.description }}</p>
+          <p *ngIf="task.dueDate" class="text-gray-400 text-xs mt-2">
+            Fällig: {{ task.dueDate | date:'dd.MM.yyyy' }}
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Status ändern -->
+          <select
+            #statusSelect
+            [value]="task.status"
+            (change)="updateStatus(task, statusSelect.value)"
+            class="text-sm border border-gray-200 rounded-lg px-2 py-1
+                   focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="TODO">Offen</option>
+            <option value="IN_PROGRESS">In Bearbeitung</option>
+            <option value="DONE">Erledigt</option>
+          </select>
+
+          <!-- Bearbeiten Button -->
+          <button
+            (click)="openEditModal(task)"
+            class="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50
+                   rounded-lg transition-colors"
+            title="Bearbeiten"
+          >
+            ✏️
+          </button>
+
+          <!-- Löschen Button -->
+          <button
+            (click)="deleteTask(task.id)"
+            class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50
+                   rounded-lg transition-colors"
+            title="Löschen"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- MODAL – Neue Aufgabe / Aufgabe bearbeiten                     -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+
+<!--
+  Das Modal liegt AUSSERHALB des Haupt-Divs.
+  *ngIf = Nur anzeigen wenn showCreateModal ODER showEditModal true ist
+-->
+<div *ngIf="showCreateModal || showEditModal"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4">
+  <!--
+    fixed        = Bleibt an Ort und Stelle beim Scrollen
+    inset-0      = Shorthand für top:0, right:0, bottom:0, left:0
+                   → deckt den GESAMTEN Bildschirm ab
+    z-50         = Liegt über allem anderen (Z-Achse)
+    flex items-center justify-center = Inhalt mittig
+  -->
+
+  <!-- HINTERGRUND (Overlay) – Klick schließt Modal -->
+  <div
+    class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+    (click)="closeModal()"
+  ></div>
+  <!--
+    absolute inset-0    = Füllt den fixed-Container komplett
+    bg-black            = Schwarzer Hintergrund
+    bg-opacity-50       = 50% durchsichtig → man sieht die Seite dahinter
+    backdrop-blur-sm    = Leichter Unschärfe-Effekt
+    (click)="closeModal()" → Klick auf dunklen Bereich schließt Modal
+  -->
+
+  <!-- MODAL-INHALT (Karte) -->
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg
+              max-h-screen overflow-y-auto">
+    <!--
+      relative         = Damit absolute Kindelemente sich daran orientieren
+      max-h-screen     = Höchstens so hoch wie der Bildschirm
+      overflow-y-auto  = Scrollbar wenn Inhalt zu groß
+    -->
+
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between p-6 border-b border-gray-100">
+      <h2 class="text-xl font-bold text-gray-800">
+        {{ showEditModal ? 'Aufgabe bearbeiten' : 'Neue Aufgabe' }}
+        <!--
+          Ternärer Operator: Bedingung ? WennTrue : WennFalse
+          Zeigt je nach Modus den passenden Titel
+        -->
+      </h2>
+
+      <!-- X-Button zum Schließen -->
+      <button
+        (click)="closeModal()"
+        class="w-8 h-8 flex items-center justify-center text-gray-400
+               hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+      >
+        ✕
+      </button>
+    </div>
+
+    <!-- Modal Body (Formular) -->
+    <div class="p-6">
+      <form [formGroup]="taskForm" (ngSubmit)="saveTask()" class="space-y-5">
+        <!--
+          space-y-5 = Vertikaler Abstand (20px) zwischen allen direkten Kindern
+          Spart viele mb-5 Klassen!
+        -->
+
+        <!-- TITEL (Pflichtfeld) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Titel <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            formControlName="title"
+            placeholder="Was muss erledigt werden?"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg
+                   focus:outline-none focus:ring-2 focus:ring-blue-500
+                   focus:border-transparent transition-all"
+            [class.border-red-500]="taskForm.get('title')?.invalid &&
+                                    taskForm.get('title')?.touched"
+          >
+          <div *ngIf="taskForm.get('title')?.invalid &&
+                      taskForm.get('title')?.touched"
+               class="mt-1 text-red-500 text-xs">
+            Titel ist erforderlich
+          </div>
+        </div>
+
+        <!-- BESCHREIBUNG (optional) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Beschreibung
+            <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <!--
+            textarea = Mehrzeiliges Eingabefeld
+            rows="3"  = Startet mit 3 Zeilen Höhe
+            resize-none = User kann Größe nicht verändern (sauberer)
+          -->
+          <textarea
+            formControlName="description"
+            placeholder="Zusätzliche Details..."
+            rows="3"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg
+                   focus:outline-none focus:ring-2 focus:ring-blue-500
+                   focus:border-transparent transition-all resize-none"
+          ></textarea>
+        </div>
+
+        <!-- STATUS + PRIORITÄT nebeneinander -->
+        <div class="grid grid-cols-2 gap-4">
+
+          <!-- STATUS -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <select
+              formControlName="status"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg
+                     bg-white focus:outline-none focus:ring-2
+                     focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="TODO">📋 Offen</option>
+              <option value="IN_PROGRESS">⚡ In Bearbeitung</option>
+              <option value="DONE">✅ Erledigt</option>
+            </select>
+          </div>
+
+          <!-- PRIORITÄT -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Priorität
+            </label>
+            <select
+              formControlName="priority"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg
+                     bg-white focus:outline-none focus:ring-2
+                     focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="LOW">🟢 Niedrig</option>
+              <option value="MEDIUM">🟡 Mittel</option>
+              <option value="HIGH">🔴 Hoch</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- FÄLLIGKEITSDATUM -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Fälligkeitsdatum
+            <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <!--
+            type="date" = Browser zeigt einen Datums-Picker an
+            Kein extra JavaScript nötig!
+          -->
+          <input
+            type="date"
+            formControlName="dueDate"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg
+                   focus:outline-none focus:ring-2 focus:ring-blue-500
+                   focus:border-transparent transition-all"
+          >
+        </div>
+
+        <!-- BUTTONS (Abbrechen + Speichern) -->
+        <div class="flex gap-3 pt-2">
+          <!--
+            flex gap-3 = Buttons nebeneinander mit 12px Abstand
+            pt-2       = etwas Abstand nach oben
+          -->
+
+          <!-- Abbrechen -->
+          <button
+            type="button"
+            (click)="closeModal()"
+            class="flex-1 px-4 py-3 border border-gray-300 text-gray-700
+                   rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Abbrechen
+          </button>
+
+          <!-- Speichern -->
+          <button
+            type="submit"
+            [disabled]="isSubmitting"
+            class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg
+                   hover:bg-blue-700 disabled:opacity-50
+                   disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            <span *ngIf="!isSubmitting">
+              {{ showEditModal ? '💾 Speichern' : '➕ Erstellen' }}
+            </span>
+            <span *ngIf="isSubmitting"
+                  class="flex items-center justify-center gap-2">
+              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10"
+                        stroke="currentColor" stroke-width="4" fill="none"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Wird gespeichert...
+            </span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>

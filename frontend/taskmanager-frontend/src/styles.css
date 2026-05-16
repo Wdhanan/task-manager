@@ -1,0 +1,11 @@
+/* Diese 3 Zeilen sind PFLICHT – sie laden Tailwinds Basis-Styles */
+@tailwind base;       /* ← Reset: macht alle Browser gleich */
+@tailwind components; /* ← Tailwinds eigene Komponenten */
+@tailwind utilities;  /* ← Die ganzen Klassen wie bg-blue-500 */
+
+
+/* Deine eigenen globalen Styles kommen DARUNTER */
+body {
+  @apply bg-gray-50 text-gray-900;
+  /* @apply = "Benutze diese Tailwind-Klassen hier" */
+}

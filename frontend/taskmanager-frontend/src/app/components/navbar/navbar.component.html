@@ -1,0 +1,37 @@
+<!-- src/app/components/navbar/navbar.component.html -->
+
+<nav class="bg-white border-b border-gray-200 px-6 py-4 
+            flex items-center justify-between fixed top-0 right-0 left-64 z-10">
+  <!--
+    fixed = Position: fest (bewegt sich nicht beim Scrollen)
+    top-0 right-0 = an der oberen rechten Ecke befestigt
+    left-64 = 256px von links (Platz für Sidebar)
+    z-10 = Z-Index: über anderen Elementen
+  -->
+
+  <div>
+    <h2 class="text-gray-800 font-semibold">TaskManager</h2>
+  </div>
+
+  <div class="flex items-center gap-4">
+    <!-- User Info -->
+    <div *ngIf="currentUser" class="flex items-center gap-3">
+      <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center 
+                  justify-center text-white text-sm font-bold">
+        <!-- Username ersten Buchstaben anzeigen -->
+        {{ currentUser.username.charAt(0).toUpperCase() }}
+      </div>
+      <span class="text-gray-700 text-sm font-medium">
+        {{ currentUser.username }}
+      </span>
+    </div>
+    
+    <button 
+      (click)="logout()"
+      class="text-gray-500 hover:text-red-600 text-sm hover:bg-red-50 
+             px-3 py-2 rounded-lg transition-colors"
+    >
+      Abmelden
+    </button>
+  </div>
+</nav>

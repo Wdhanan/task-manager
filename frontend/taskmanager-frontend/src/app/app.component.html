@@ -1,0 +1,58 @@
+<!-- src/app/app.component.html -->
+
+<!--
+  Das ist die "Wurzel" der App.
+  Alles andere wird hier hineingerendert.
+
+  STRUKTUR:
+  ┌─────────────────────────────────────┐
+  │ NAVBAR (oben, wenn eingeloggt)      │
+  ├───────────┬─────────────────────────┤
+  │  SIDEBAR  │   ROUTER-OUTLET         │
+  │  (links)  │   (aktuelle Seite)      │
+  └───────────┴─────────────────────────┘
+-->
+
+<!-- LAYOUT MIT NAVBAR + SIDEBAR (eingeloggte Seiten) -->
+<ng-container *ngIf="showLayout">
+  <!--
+    ng-container = Unsichtbares Wrapper-Element
+    Es rendert NICHTS im HTML, hält aber Angular-Direktiven
+    Perfekt wenn du *ngIf brauchst aber kein extra <div> willst
+  -->
+
+  <!-- Navbar oben -->
+  <app-navbar></app-navbar>
+
+  <!-- Wrapper: Sidebar links + Inhalt rechts -->
+  <div class="flex min-h-screen bg-gray-50 pt-16">
+    <!--
+      pt-16 = padding-top: 64px
+      Das schiebt den Inhalt unter die fixierte Navbar
+      (Navbar hat eine feste Höhe von ~64px)
+    -->
+
+    <!-- Sidebar -->
+    <app-sidebar></app-sidebar>
+
+    <!-- Hauptinhalt: nimmt den restlichen Platz -->
+    <main class="flex-1 ml-64 p-6 min-h-screen">
+      <!--
+        flex-1 = Nimmt allen übrigen Platz (neben der Sidebar)
+        ml-64  = margin-left: 256px (Sidebar-Breite)
+                 Inhalt startet RECHTS neben der Sidebar
+        p-6    = 24px Abstand innen
+      -->
+      <router-outlet></router-outlet>
+      <!--
+        router-outlet = "Hier wird die aktuelle Seite eingeblendet"
+        Angular tauscht den Inhalt je nach URL automatisch aus
+      -->
+    </main>
+  </div>
+</ng-container>
+
+<!-- LAYOUT OHNE SIDEBAR (Login, Register) -->
+<ng-container *ngIf="!showLayout">
+  <router-outlet></router-outlet>
+</ng-container>
