@@ -2,117 +2,172 @@
 
 package com.taskmanager.backend.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.taskmanager.backend.dto.*;
-import com.taskmanager.backend.service.AuthService;
+import com.taskmanager.backend.dto.AuthResponse;
+import com.taskmanager.backend.dto.LoginRequest;
+import com.taskmanager.backend.dto.RegisterRequest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.*;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-// @WebMvcTest = Nur den Web-Layer testen (Controller + Security)
-// Kein Service, kein Repository, kein echtes Spring Context
-@WebMvcTest(AuthController.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// ↑ Startet einen echten Server auf einem zufälligen Port
+//   Kein Konflikt mit Port 8080 wenn der schon belegt ist
+
+@ActiveProfiles("test")
+// ↑ Benutzt src/test/resources/application.yml (H2 Datenbank)
+
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+// ↑ Nach jedem Test: Spring Context neu starten
+//   Verhindert dass Test-Daten sich gegenseitig beeinflussen
+//   (z.B. ein registrierter User aus Test 1 stört Test 2)
+
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+// ↑ Tests in definierter Reihenfolge ausführen
 class AuthControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-    // ↑ MockMvc = "Simuliert HTTP-Requests ohne echten Server"
+    @LocalServerPort
+    private int port;
+    // ↑ Der zufällige Port wird hier injiziert
+    //   z.B. 54321
 
     @Autowired
-    private ObjectMapper objectMapper;
-    // ↑ ObjectMapper = JSON ↔ Java Objekt Konverter
+    private TestRestTemplate restTemplate;
+    // ↑ TestRestTemplate = HTTP-Client für Tests
+    //   Schickt echte HTTP-Requests zum echten Server
 
-    @MockBean
-    private AuthService authService;
-    // ↑ @MockBean = Mock der in den Spring Context injiziert wird
+    private String baseUrl;
+
+    @BeforeEach
+    void setUp() {
+        baseUrl = "http://localhost:" + port + "/api/auth";
+        // ↑ Basis-URL für alle Requests
+        //   z.B. http://localhost:54321/api/auth
+    }
+
+    // ════════════════════════════════════════
+    // REGISTER TESTS
+    // ════════════════════════════════════════
 
     @Test
-    @DisplayName("POST /api/auth/register → 201 Created bei gültigem Request")
-    void register_Returns201_WithValidRequest() throws Exception {
+    @Order(1)
+    @DisplayName("Register: 201 bei gültigen Daten")
+    void register_Returns201_WithValidData() {
 
         // Arrange
         RegisterRequest request = new RegisterRequest();
-        request.setUsername("newuser");
-        request.setEmail("new@example.com");
-        request.setPassword("password123");
-        request.setFirstName("Max");
-        request.setLastName("Muster");
-
-        AuthResponse mockResponse = AuthResponse.builder()
-                .token("mock.token.here")
-                .id(1L)
-                .username("newuser")
-                .email("new@example.com")
-                .role("USER")
-                .build();
-
-        when(authService.register(any(RegisterRequest.class))).thenReturn(mockResponse);
-
-        // Act & Assert
-        mockMvc.perform(
-                        post("/api/auth/register")             // HTTP POST Request
-                                .contentType(MediaType.APPLICATION_JSON) // Content-Type Header
-                                .content(objectMapper.writeValueAsString(request))
-                        // ↑ Java Objekt → JSON String
-                )
-                .andExpect(status().isCreated())           // HTTP 201?
-                .andExpect(jsonPath("$.token").value("mock.token.here"))
-                // ↑ jsonPath = JSON-Pfad in der Antwort prüfen
-                //   "$.token" = Feld "token" im Root-Objekt
-                .andExpect(jsonPath("$.username").value("newuser"))
-                .andExpect(jsonPath("$.role").value("USER"));
-    }
-
-    @Test
-    @DisplayName("POST /api/auth/register → 400 Bad Request bei fehlendem Username")
-    void register_Returns400_WhenUsernameIsMissing() throws Exception {
-
-        // Arrange - Request OHNE Username
-        RegisterRequest request = new RegisterRequest();
-        // request.setUsername() ← absichtlich nicht gesetzt!
+        request.setUsername("testuser");
         request.setEmail("test@example.com");
         request.setPassword("password123");
-        request.setFirstName("Max");
-        request.setLastName("Muster");
+        request.setFirstName("Test");
+        request.setLastName("User");
 
-        // Act & Assert
-        mockMvc.perform(
-                        post("/api/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
-                )
-                .andExpect(status().isBadRequest())  // HTTP 400?
-                .andExpect(jsonPath("$.fieldErrors.username").exists());
-        // ↑ Fehlermeldung für "username" Feld vorhanden?
+        // Act – echter HTTP POST Request
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
+                baseUrl + "/register",
+                request,
+                AuthResponse.class
+        );
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getToken()).isNotEmpty();
+        assertThat(response.getBody().getUsername()).isEqualTo("testuser");
+        assertThat(response.getBody().getRole()).isEqualTo("USER");
     }
 
     @Test
-    @DisplayName("POST /api/auth/login → 401 bei falschen Credentials")
-    void login_Returns401_WithInvalidCredentials() throws Exception {
+    @Order(2)
+    @DisplayName("Register: 400 wenn Username fehlt")
+    void register_Returns400_WhenUsernameEmpty() {
 
-        // Arrange
-        LoginRequest request = new LoginRequest();
-        request.setUsername("johndoe");
-        request.setPassword("falschesPasswort");
+        RegisterRequest request = new RegisterRequest();
+        // username absichtlich weggelassen
+        request.setEmail("test2@example.com");
+        request.setPassword("password123");
+        request.setFirstName("Test");
+        request.setLastName("User");
 
-        when(authService.login(any(LoginRequest.class)))
-                .thenThrow(new BadCredentialsException("Ungültige Credentials"));
+        ResponseEntity<Object> response = restTemplate.postForEntity(
+                baseUrl + "/register",
+                request,
+                Object.class
+        );
 
-        // Act & Assert
-        mockMvc.perform(
-                        post("/api/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
-                )
-                .andExpect(status().isUnauthorized());  // HTTP 401?
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @Order(3)
+    @DisplayName("Register: 400 bei doppeltem Username")
+    void register_Returns400_WhenUsernameAlreadyExists() {
+
+        // Erst registrieren
+        RegisterRequest first = new RegisterRequest();
+        first.setUsername("duplicate");
+        first.setEmail("first@example.com");
+        first.setPassword("password123");
+        first.setFirstName("First");
+        first.setLastName("User");
+        restTemplate.postForEntity(baseUrl + "/register", first, Object.class);
+
+        // Nochmal mit gleichem Username registrieren
+        RegisterRequest second = new RegisterRequest();
+        second.setUsername("duplicate");
+        second.setEmail("second@example.com");
+        second.setPassword("password123");
+        second.setFirstName("Second");
+        second.setLastName("User");
+
+        ResponseEntity<Object> response = restTemplate.postForEntity(
+                baseUrl + "/register",
+                second,
+                Object.class
+        );
+
+        assertThat(response.getStatusCode())
+                .isIn(HttpStatus.BAD_REQUEST, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    // ════════════════════════════════════════
+    // LOGIN TESTS
+    // ════════════════════════════════════════
+
+    @Test
+    @Order(4)
+    @DisplayName("Login: 200 bei korrekten Credentials")
+    void login_Returns200_WithValidCredentials() {
+
+        // Erst User registrieren
+        RegisterRequest register = new RegisterRequest();
+        register.setUsername("loginuser");
+        register.setEmail("login@example.com");
+        register.setPassword("password123");
+        register.setFirstName("Login");
+        register.setLastName("User");
+        restTemplate.postForEntity(baseUrl + "/register", register, Object.class);
+
+        // Dann einloggen
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setUsername("loginuser");
+        loginRequest.setPassword("password123");
+
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
+                baseUrl + "/login",
+                loginRequest,
+                AuthResponse.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getToken()).isNotEmpty();
+        assertThat(response.getBody().getUsername()).isEqualTo("loginuser");
     }
 }

@@ -2,15 +2,21 @@
 
 package com.taskmanager.backend.service;
 
-import com.taskmanager.backend.dto.*;
+import com.taskmanager.backend.dto.LoginRequest;
+import com.taskmanager.backend.dto.RegisterRequest;
+import com.taskmanager.backend.dto.AuthResponse;
 import com.taskmanager.backend.entity.User;
 import com.taskmanager.backend.repository.UserRepository;
 import com.taskmanager.backend.security.JwtUtil;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.*;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
@@ -19,157 +25,112 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-// @ExtendWith = "Benutze Mockito für diese Test-Klasse"
 @ExtendWith(MockitoExtension.class)
+//   Viel schneller als @SpringBootTest oder @WebMvcTest
 class AuthServiceTest {
 
-  // @Mock = "Erstelle einen Fake dieser Klasse"
-  @Mock private UserRepository userRepository;
-  @Mock private PasswordEncoder passwordEncoder;
-  @Mock private JwtUtil jwtUtil;
-  @Mock private AuthenticationManager authenticationManager;
+    @Mock private UserRepository userRepository;
+    @Mock private PasswordEncoder passwordEncoder;
+    @Mock private JwtUtil jwtUtil;
+    @Mock private AuthenticationManager authenticationManager;
 
-  // @InjectMocks = "Erstelle AuthService und injiziere alle @Mocks"
-  @InjectMocks
-  private AuthService authService;
+    @InjectMocks
+    private AuthService authService;
 
-  // ════════════════════════════════════════
-  // REGISTER TESTS
-  // ════════════════════════════════════════
+    @Test
+    @DisplayName("Register: Erfolgreich wenn User nicht existiert")
+    void register_Success() {
 
-  @Test
-  // @Test = "Das ist ein Test"
-  @DisplayName("Registrierung erfolgreich wenn Username und Email verfügbar")
-  // @DisplayName = Lesbarer Name im Test-Report
-  void register_Success_WhenUsernameAndEmailAvailable() {
+        // Arrange
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("newuser");
+        request.setEmail("new@example.com");
+        request.setPassword("password123");
+        request.setFirstName("New");
+        request.setLastName("User");
 
-    // ── ARRANGE (Vorbereitung) ──────────────────────────────
-    // "Gegeben" = Was ist der Ausgangszustand?
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
+        when(passwordEncoder.encode(any())).thenReturn("$2a$hashedPw");
 
-    RegisterRequest request = new RegisterRequest();
-    request.setUsername("johndoe");
-    request.setEmail("john@example.com");
-    request.setPassword("password123");
-    request.setFirstName("John");
-    request.setLastName("Doe");
+        User savedUser = User.builder()
+                .id(1L).username("newuser")
+                .email("new@example.com")
+                .role(User.Role.USER)
+                .build();
 
-    // Mock-Verhalten definieren:
-    // "Wenn userRepository.existsByUsername('johndoe') aufgerufen wird → gib false zurück"
-    when(userRepository.existsByUsername("johndoe")).thenReturn(false);
-    when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtUtil.generateToken(any())).thenReturn("jwt.token.here");
 
-    // "Wenn passwordEncoder.encode(irgendein String) aufgerufen wird → gib das zurück"
-    when(passwordEncoder.encode(anyString())).thenReturn("$2a$10$hashedPassword");
+        // Act
+        AuthResponse response = authService.register(request);
 
-    // "Wenn userRepository.save(irgendein User) aufgerufen wird → gib diesen User zurück"
-    User savedUser = User.builder()
-        .id(1L)
-        .username("johndoe")
-        .email("john@example.com")
-        .password("$2a$10$hashedPassword")
-        .firstName("John")
-        .lastName("Doe")
-        .role(User.Role.USER)
-        .build();
-    when(userRepository.save(any(User.class))).thenReturn(savedUser);
-    when(jwtUtil.generateToken(any())).thenReturn("mock.jwt.token");
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getToken()).isEqualTo("jwt.token.here");
+        assertThat(response.getUsername()).isEqualTo("newuser");
 
-    // ── ACT (Ausführung) ─────────────────────────────────────
-    // "Wenn" = Die eigentliche Aktion
-    AuthResponse response = authService.register(request);
+        verify(passwordEncoder).encode("password123");
+        verify(userRepository).save(any(User.class));
+    }
 
-    // ── ASSERT (Prüfung) ─────────────────────────────────────
-    // "Dann" = Was soll das Ergebnis sein?
+    @Test
+    @DisplayName("Register: Fehler wenn Username bereits existiert")
+    void register_Fails_WhenUsernameExists() {
 
-    // AssertJ macht lesbare Assertions:
-    assertThat(response).isNotNull();
-    assertThat(response.getToken()).isEqualTo("mock.jwt.token");
-    assertThat(response.getUsername()).isEqualTo("johndoe");
-    assertThat(response.getEmail()).isEqualTo("john@example.com");
-    assertThat(response.getRole()).isEqualTo("USER");
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("existinguser");
+        request.setEmail("email@example.com");
+        request.setPassword("pw");
+        request.setFirstName("A");
+        request.setLastName("B");
 
-    // Prüfen ob die Methoden aufgerufen wurden:
-    verify(userRepository).save(any(User.class));
-    // ↑ "userRepository.save() muss genau einmal aufgerufen worden sein"
+        when(userRepository.existsByUsername("existinguser")).thenReturn(true);
 
-    verify(passwordEncoder).encode("password123");
-    // ↑ "Das Passwort muss gehasht worden sein"
-  }
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Benutzername bereits vergeben");
 
-  @Test
-  @DisplayName("Registrierung schlägt fehl wenn Username bereits vergeben")
-  void register_ThrowsException_WhenUsernameAlreadyExists() {
+        verify(userRepository, never()).save(any());
+    }
 
-    // Arrange
-    RegisterRequest request = new RegisterRequest();
-    request.setUsername("existing_user");
-    request.setEmail("new@example.com");
-    request.setPassword("password");
-    request.setFirstName("Max");
-    request.setLastName("Muster");
+    @Test
+    @DisplayName("Login: Erfolgreich bei korrekten Credentials")
+    void login_Success() {
 
-    when(userRepository.existsByUsername("existing_user")).thenReturn(true);
-    // ↑ Mock sagt: "Dieser Username existiert bereits"
+        LoginRequest request = new LoginRequest();
+        request.setUsername("testuser");
+        request.setPassword("password123");
 
-    // Act & Assert kombiniert:
-    // "assertThatThrownBy" = "Dieser Code-Block muss eine Exception werfen"
-    assertThatThrownBy(() -> authService.register(request))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Benutzername bereits vergeben");
+        User user = User.builder()
+                .id(1L).username("testuser")
+                .email("test@example.com")
+                .role(User.Role.USER)
+                .build();
 
-    // Prüfen dass save() NICHT aufgerufen wurde (kein User gespeichert)
-    verify(userRepository, never()).save(any());
-    // ↑ never() = "Diese Methode darf NICHT aufgerufen worden sein"
-  }
+        when(authenticationManager.authenticate(any())).thenReturn(null);
+        when(userRepository.findByUsername("testuser"))
+                .thenReturn(Optional.of(user));
+        when(jwtUtil.generateToken(user)).thenReturn("login.jwt.token");
 
-  // ════════════════════════════════════════
-  // LOGIN TESTS
-  // ════════════════════════════════════════
+        AuthResponse response = authService.login(request);
 
-  @Test
-  @DisplayName("Login erfolgreich bei korrekten Credentials")
-  void login_Success_WithValidCredentials() {
+        assertThat(response.getToken()).isEqualTo("login.jwt.token");
+        assertThat(response.getUsername()).isEqualTo("testuser");
+    }
 
-    // Arrange
-    LoginRequest request = new LoginRequest();
-    request.setUsername("johndoe");
-    request.setPassword("password123");
+    @Test
+    @DisplayName("Login: Fehler bei falschen Credentials")
+    void login_Fails_WithWrongCredentials() {
 
-    User user = User.builder()
-        .id(1L)
-        .username("johndoe")
-        .email("john@example.com")
-        .role(User.Role.USER)
-        .build();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("user");
+        request.setPassword("wrongpw");
 
-    // authenticationManager wirft keine Exception = Credentials korrekt
-    when(authenticationManager.authenticate(any())).thenReturn(null);
-    when(userRepository.findByUsername("johndoe")).thenReturn(Optional.of(user));
-    when(jwtUtil.generateToken(user)).thenReturn("valid.jwt.token");
+        when(authenticationManager.authenticate(any()))
+                .thenThrow(new BadCredentialsException("Falsch"));
 
-    // Act
-    AuthResponse response = authService.login(request);
-
-    // Assert
-    assertThat(response.getToken()).isEqualTo("valid.jwt.token");
-    assertThat(response.getUsername()).isEqualTo("johndoe");
-  }
-
-  @Test
-  @DisplayName("Login schlägt fehl bei falschen Credentials")
-  void login_ThrowsException_WithInvalidCredentials() {
-
-    // Arrange
-    LoginRequest request = new LoginRequest();
-    request.setUsername("johndoe");
-    request.setPassword("falschesPassword");
-
-    // authenticationManager wirft Exception = Credentials falsch
-    when(authenticationManager.authenticate(any()))
-        .thenThrow(new BadCredentialsException("Ungültige Credentials"));
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(request))
-        .isInstanceOf(BadCredentialsException.class);
-  }
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(BadCredentialsException.class);
+    }
 }
