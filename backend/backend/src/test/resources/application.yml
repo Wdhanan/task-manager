@@ -1,0 +1,38 @@
+# src/test/resources/application.yml
+# Diese Datei gilt NUR für Tests (überschreibt die echte)
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # ↑ jdbc:h2:mem = "H2 im Arbeitsspeicher"
+    #   testdb      = Name der Test-Datenbank
+    #   DB_CLOSE_DELAY=-1 = Datenbank bleibt offen während Tests laufen
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+    # ↑ H2 hat eigenen Treiber (sa = standard admin, kein Passwort)
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+      # ↑ create-drop = Tabellen beim Teststart erstellen,
+      #                 beim Testende löschen
+      #   Perfekt für Tests: jeder Test startet frisch!
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        # ↑ H2 hat eigenen Dialekt
+
+  # Security deaktivieren wäre zu viel – stattdessen
+  # nur den Datenbanktest absichern
+
+app:
+  jwt:
+    secret: testSecretKeyForTestingPurposesOnly12345678
+    expiration: 86400000
+
+logging:
+  level:
+    com.taskmanager: WARN
+    # ↑ Weniger Log-Output bei Tests
