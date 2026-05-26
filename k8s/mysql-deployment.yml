@@ -1,13 +1,26 @@
-# k8s/mysql-deployment.yml
+# k8s/mysql-deployment.yml – KOMPLETT ERSETZEN
 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: taskmanager
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 10Gi
+
+---
 apiVersion: apps/v1
 kind: Deployment
-# ↑ Deployment = "Halte immer X Instanzen dieser App am Laufen"
 metadata:
   name: mysql
   namespace: taskmanager
 spec:
-  replicas: 1   # Eine MySQL-Instanz
+  replicas: 1
   selector:
     matchLabels:
       app: mysql
@@ -27,37 +40,24 @@ spec:
                 secretKeyRef:
                   name: mysql-secret
                   key: password
-              # ↑ Passwort aus Kubernetes Secret lesen
-              #   (wie GitHub Secrets, aber für Kubernetes)
             - name: MYSQL_DATABASE
               value: taskmanager
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
-              # ↑ Daten werden persistent gespeichert
       volumes:
         - name: mysql-storage
           persistentVolumeClaim:
             claimName: mysql-pvc
-            # ↑ PVC = Persistent Volume Claim
-            #   "Ich brauche X GB Speicher"
 
 ---
-# PersistentVolumeClaim = Anfrage für Speicherplatz
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-pvc
-  namespace: taskmanager
-spec:
-  accessModes:
-    - ReadWriteOnce   # Nur ein Container kann schreiben
-  resources:
-    requests:
-      storage: 10Gi   # 10 Gigabyte Speicher
-
----
-# Service = "Wie erreiche ich MySQL von anderen Containern?"
 apiVersion: v1
 kind: Service
 metadata:
@@ -70,5 +70,3 @@ spec:
     - port: 3306
       targetPort: 3306
   type: ClusterIP
-  # ↑ ClusterIP = Nur intern erreichbar (nicht von außen)
-  #   Gut für Datenbanken!

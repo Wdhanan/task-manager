@@ -134,15 +134,51 @@ jobs:
             --name taskmanager-cluster \
             --region eu-central-1
 
-      - name: Kubernetes aktualisieren
+      - name: Kubernetes Ressourcen erstellen/aktualisieren
         run: |
+          # Erst alle Ressourcen anwenden (erstellt falls nicht vorhanden)
+          kubectl apply -f k8s/
+          # ↑ apply = "Erstelle ODER aktualisiere"
+          #   Wenn Deployment nicht existiert → erstellen
+          #   Wenn es existiert → aktualisieren
+          #   Sicherer als "set image" alleine!
+
+      - name: Neue Images deployen
+        run: |
+          # Backend Image aktualisieren
           kubectl set image deployment/backend \
             backend=${{ secrets.DOCKER_USERNAME }}/taskmanager-backend:${{ github.sha }} \
             -n taskmanager
 
+          # Frontend Image aktualisieren
           kubectl set image deployment/frontend \
             frontend=${{ secrets.DOCKER_USERNAME }}/taskmanager-frontend:${{ github.sha }} \
             -n taskmanager
 
-          kubectl rollout status deployment/backend -n taskmanager
-          kubectl rollout status deployment/frontend -n taskmanager
+      - name: Deployment-Status prüfen
+        run: |
+          # Warten bis Backend läuft (max 5 Minuten)
+          kubectl rollout status deployment/backend \
+            -n taskmanager \
+            --timeout=300s
+
+          # Warten bis Frontend läuft (max 5 Minuten)
+          kubectl rollout status deployment/frontend \
+            -n taskmanager \
+            --timeout=300s
+
+      - name: Deployment-Info anzeigen
+        if: always()
+        # ↑ "Zeige das IMMER, auch wenn vorherige Schritte fehlschlugen"
+        #   Hilfreich zum Debuggen!
+        run: |
+          echo "=== PODS ==="
+          kubectl get pods -n taskmanager
+
+          echo "=== SERVICES ==="
+          kubectl get services -n taskmanager
+
+          echo "=== EVENTS (letzte Fehler) ==="
+          kubectl get events -n taskmanager \
+            --sort-by='.lastTimestamp' \
+            | tail -20
